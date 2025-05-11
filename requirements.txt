@@ -1,0 +1,14 @@
+# Configs
+hydra-core>=1.3
+omegaconf>=2.3
+
+# Formatting
+black
+
+# Model
+torch>=1.9
+torchvision>=0.10
+pytorch-lightning>=1.5
+numpy>=1.19
+Pillow>=8.0
+pandas >= 1.3.0, <2.2

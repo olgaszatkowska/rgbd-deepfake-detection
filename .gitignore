@@ -172,3 +172,16 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Virtual env
+rgbd-df-detect-venv
+
+# Logs
+outputs
+
+# Dataset
+dataset
+
+# Experiments
+experiments/
+experiments.py
