@@ -74,20 +74,28 @@ class FaceForensics(Dataset):
         # Load the image and apply transformations
         image = Image.open(self.dataset.images[idx]).convert("RGB")
 
-        if self.input_type == 'rgbd':
+        if self.input_type == "rgbd":
             # Load depth
-            if self.depth_type == 'hha':
+            if self.depth_type == "hha":
                 image = np.array(image)
-                tmp = str(self.dataset.depths[idx]).split('Depth-Faces')
-                path = tmp[0] + 'HHA-Faces' + tmp[1].split('.')[0]+'.png'
+                tmp = str(self.dataset.depths[idx]).split("Depth-Faces")
+                path = tmp[0] + "HHA-Faces" + tmp[1].split(".")[0] + ".png"
                 hha = Image.open(path).convert("RGB")
                 hha = np.array(hha)
-                
+
                 image = np.stack(
-                    (image[:, :, 0], image[:, :, 1], image[:, :, 2], hha[:, :, 0], hha[:, :, 1], hha[:, :, 2]), axis=-1
+                    (
+                        image[:, :, 0],
+                        image[:, :, 1],
+                        image[:, :, 2],
+                        hha[:, :, 0],
+                        hha[:, :, 1],
+                        hha[:, :, 2],
+                    ),
+                    axis=-1,
                 )
-                
-            elif self.depth_type == 'depth':
+
+            elif self.depth_type == "depth":
                 depth = np.load(self.dataset.depths[idx], allow_pickle=True)
                 image = np.array(image)
                 image = np.stack(
@@ -96,25 +104,24 @@ class FaceForensics(Dataset):
             else:
                 raise NotImplementedError
 
-        elif self.input_type == 'd':
+        elif self.input_type == "d":
             # Load depth
-            if self.depth_type == 'hha':
-                tmp = str(self.dataset.depths[idx]).split('Depth-Faces')
-                path = tmp[0] + 'HHA-Faces' + tmp[1].split('.')[0]+'.png'
+            if self.depth_type == "hha":
+                tmp = str(self.dataset.depths[idx]).split("Depth-Faces")
+                path = tmp[0] + "HHA-Faces" + tmp[1].split(".")[0] + ".png"
                 hha = Image.open(path).convert("RGB")
                 image = np.array(hha)
-    
-            elif self.depth_type == 'depth':
+
+            elif self.depth_type == "depth":
                 image = np.load(self.dataset.depths[idx], allow_pickle=True)
             else:
                 raise NotImplementedError
-            
-        elif self.input_type == 'rgb':
+
+        elif self.input_type == "rgb":
             pass
-            #do nothing
+            # do nothing
         else:
             raise NotImplementedError
-
 
         if self.transform:
             image = self.transform(image)
@@ -138,7 +145,6 @@ class FaceForensics(Dataset):
         # Loop over compression levels
         for compression in self.compression_level:
             # Loop over real videos
-            logger.info(f"Loading real videos for classes {self.real}")
             for real in self.real:
                 if use_depth:
                     # Add depths
@@ -159,7 +165,7 @@ class FaceForensics(Dataset):
 
                     # Add labels
                     list_of_labels = self._load_labels(list_of_images, real)
-                    
+
                     images += list_of_images
                     depths += list_of_depths
                     labels += list_of_labels
@@ -180,7 +186,6 @@ class FaceForensics(Dataset):
 
             if use_attacks:
                 # Loop over the attacks
-                logger.info(f"Loading fake videos for attacks {self.attacks}")
                 for attack in self.attacks:
                     if use_depth:
                         # Add depths
@@ -238,7 +243,9 @@ class FaceForensics(Dataset):
                 "*/*.jpg"
             )
         ]
-        logger.info(f"Found {len(images)}")
+        logger.info(
+            f"Found {len(images)} images for params label={label} compression={compression} class_id={class_id}"
+        )
         return images
 
     def _load_labels(self, images, class_id):
@@ -266,10 +273,13 @@ class FaceForensics(Dataset):
             path
             for path in Path(self.depth_path, label, compression, source).glob(
                 "*/*.npy"
-            ) if not self._is_file_empty(path)
+            )
+            if not self._is_file_empty(path)
         ]
 
-        logger.info(f"Found {len(depths)}")
+        logger.info(
+            f"Found {len(depths)} depth maps for params label={label} compression={compression} source={source}"
+        )
 
         return depths
 
@@ -278,7 +288,6 @@ class FaceForensics(Dataset):
         Converts a list of depth file paths to their corresponding RGB image paths,
         then filters to keep only those RGB paths that actually exist.
         """
-        logger.info(f"Loading rgb from depths class id={class_id} compression={compression} depths={depths}")
 
         depth_images = []
         for depth in depths:
@@ -288,14 +297,10 @@ class FaceForensics(Dataset):
             rgb_path = rgb_path.replace("_d.npy", ".jpg")
             depth_images.append(Path(rgb_path))
 
-        logger.debug(f"Generated {len(depth_images)}")
-
         # Remove paths if they do not exist
         rgb_images = self._load_rgb(compression, label=label, class_id=class_id)
         images_to_remove = set(depth_images) - set(rgb_images)
         images = list(set(depth_images) - images_to_remove)
-
-        logger.debug(f"Loaded {len(images)}")
 
         return images
 
