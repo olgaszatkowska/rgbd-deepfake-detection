@@ -4,9 +4,3 @@ defaults:
   - training: playground
   - logging: basic
   - data: faceforensics
-
-hydra:
-  job:
-    chdir: true
-  run:
-    dir: ./experiments/${model.model_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}

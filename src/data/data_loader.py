@@ -16,7 +16,6 @@ from random import random, sample, randint
 import numpy as np
 
 
-
 class FaceForensicsPlusPlus(pl.LightningDataModule):
     def __init__(self, conf: DictConfig):
         super().__init__()
@@ -38,7 +37,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             [
                 transforms.Lambda(self._compress_tensor),
                 transforms.ConvertImageDtype(dtype=torch.float32),
-                transforms.GaussianBlur(kernel_size=5, sigma = (4.0, 8.0))
+                transforms.GaussianBlur(kernel_size=5, sigma=(4.0, 8.0)),
             ]
         )
 
@@ -46,7 +45,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             [
                 transforms.Lambda(self._compress_tensor),
                 transforms.ConvertImageDtype(dtype=torch.float32),
-                transforms.GaussianBlur(kernel_size=5, sigma = (4.0, 8.0)),
+                transforms.GaussianBlur(kernel_size=5, sigma=(4.0, 8.0)),
                 transforms.Lambda(self._gaussian_noise),
                 transforms.Resize(size=(64, 64)),
                 transforms.Resize(size=(224, 224)),
@@ -57,30 +56,29 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             [
                 transforms.Lambda(self._compress_tensor),
                 transforms.ConvertImageDtype(dtype=torch.float32),
-                transforms.GaussianBlur(kernel_size=5, sigma = (4.0, 8.0)),
+                transforms.GaussianBlur(kernel_size=5, sigma=(4.0, 8.0)),
                 transforms.Lambda(self._gaussian_noise),
                 transforms.Resize(size=(64, 64)),
                 transforms.Resize(size=(224, 224)),
-                transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1)),
+                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
                 transforms.Lambda(self._color_jitter),
-                transforms.Lambda(self._cutout)
+                transforms.Lambda(self._cutout),
             ]
         )
 
         self.black_box_attack = transforms.Compose(
             [
-                transforms.GaussianBlur(kernel_size=5, sigma = (4.0, 8.0)),
+                transforms.GaussianBlur(kernel_size=5, sigma=(4.0, 8.0)),
                 transforms.Lambda(self._gaussian_noise),
                 transforms.Resize(size=(64, 64)),
                 transforms.Resize(size=(224, 224)),
-                transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1)),
+                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
             ]
         )
 
-        self.jitter = transforms.ColorJitter(brightness=(0, 0.5), contrast = (0, 0.5))
-        
-        self.quality = 75
+        self.jitter = transforms.ColorJitter(brightness=(0, 0.5), contrast=(0, 0.5))
 
+        self.quality = 75
 
     def setup(self, stage: Optional[str] = None):
         if stage in (None, "fit"):
@@ -131,7 +129,6 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             shuffle=False,
         )
 
-
     def on_before_batch_transfer(self, batch, dataloader_idx):
         if self.conf.data.augmentation and self.trainer.training:
             split = 0.10
@@ -148,12 +145,12 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
                 augmentation = self.augmentation2
                 split = 0.75
 
-            for i in range(batch['image'].shape[0]):
+            for i in range(batch["image"].shape[0]):
                 if random() < split:
-                    batch['image'][i] = augmentation(batch['image'][i])
+                    batch["image"][i] = augmentation(batch["image"][i])
         elif self.conf.data.black_box_attack:
-            for i in range(batch['image'].shape[0]):
-                batch['image'][i] = self.black_box_attack(batch['image'][i])
+            for i in range(batch["image"].shape[0]):
+                batch["image"][i] = self.black_box_attack(batch["image"][i])
         return batch
 
     def _compress_tensor(self, tensor) -> torch.Tensor:
@@ -165,24 +162,28 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             channels = 1
             tensor = tensor.unsqueeze(-1)
         else:
-            raise ValueError('Input tensor should have shape (height, width, channels) or (channels, height, width).')
+            raise ValueError(
+                "Input tensor should have shape (height, width, channels) or (channels, height, width)."
+            )
 
         # Apply JPEG compression to each channel
         input_tensor = (tensor.clamp(0, 1) * 255).to(torch.uint8)
         compressed_tensor = torch.zeros_like(input_tensor, dtype=torch.uint8)
         for j in range(channels):
             # Compress using JPEG
-            compressed_data = io.encode_jpeg(input_tensor[None, j, :, :], quality=self.quality)
+            compressed_data = io.encode_jpeg(
+                input_tensor[None, j, :, :], quality=self.quality
+            )
             # Decompress using JPEG
             decompressed_data = io.decode_jpeg(compressed_data)
             # Store decompressed data in compressed tensor
             compressed_tensor[j, :, :] = decompressed_data.squeeze(0)
 
         return compressed_tensor
-    
+
     def _gaussian_noise(self, tensor) -> torch.Tensor:
         return tensor + torch.normal(0, sample([0.05, 0.07], k=1)[0], size=tensor.shape)
-    
+
     def _color_jitter(self, tensor) -> torch.Tensor:
         if len(tensor.shape) == 3:
             channels, height, width = tensor.shape
@@ -190,8 +191,8 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             height, width = tensor.shape
             channels = 1
             tensor = tensor.unsqueeze(-1)
-        for j in range(channels):  
-            tensor[j, : , :] = self.jitter(tensor[None, j, :, :])
+        for j in range(channels):
+            tensor[j, :, :] = self.jitter(tensor[None, j, :, :])
         return tensor
 
     def _cutout(self, tensor) -> torch.Tensor:
@@ -212,7 +213,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             x1 = np.clip(x - length // 2, 0, w)
             x2 = np.clip(x + length // 2, 0, w)
 
-            mask[y1: y2, x1: x2] = 0.
+            mask[y1:y2, x1:x2] = 0.0
 
         mask = torch.from_numpy(mask)
         mask = mask.expand_as(tensor)
