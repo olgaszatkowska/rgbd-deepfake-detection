@@ -20,14 +20,14 @@ def main(cfg: DictConfig):
 
     network = RGBDNet(cfg=cfg)
     model = RGBDDetector(model=network, lr=cfg.training.learning_rate)
-    model_name = cfg.model.name 
+    model_name = cfg.model.name
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_acc",
         mode="max",
         save_top_k=1,
         filename=f"{cfg.model.name}" + "-{epoch:02d}-{val_acc:.2f}",
-        dirpath="checkpoints/"
+        dirpath="checkpoints/",
     )
 
     logger_tb = TensorBoardLogger("lightning_logs_tf", name=model_name)

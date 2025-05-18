@@ -33,9 +33,12 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             ]
         )
 
-        self.transform = transforms.Compose(transform + [
-            transforms.Resize((224, 224)),
-        ])
+        self.transform = transforms.Compose(
+            transform
+            + [
+                transforms.Resize((224, 224)),
+            ]
+        )
 
         self.batch_size = self.conf.data.batch_size
 

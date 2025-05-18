@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import torch
 from torchmetrics import Accuracy
 
+
 class RGBDDetector(pl.LightningModule):
     def __init__(self, model, lr=1e-4):
         super().__init__()
@@ -39,10 +40,12 @@ class RGBDDetector(pl.LightningModule):
         self.log("test_acc", acc)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.lr, weight_decay=1e-4
+        )
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.8, patience=2
+            optimizer, mode="min", factor=0.8, patience=2
         )
 
         return {
