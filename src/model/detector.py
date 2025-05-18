@@ -4,12 +4,15 @@ from torchmetrics import Accuracy
 
 
 class RGBDDetector(pl.LightningModule):
-    def __init__(self, model, lr=1e-4):
+    def __init__(self, cfg, model, lr=1e-4):
         super().__init__()
         self.model = model
         self.lr = lr
         self.criterion = torch.nn.CrossEntropyLoss()
         self.accuracy = Accuracy(task="multiclass", num_classes=2)
+
+        # Load config
+        self.cfg = cfg
 
     def forward(self, x):
         return self.model(x)
@@ -45,7 +48,7 @@ class RGBDDetector(pl.LightningModule):
         )
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.8, patience=2
+            optimizer, mode="min", factor=self.cfg.training.decay_factor, patience=2
         )
 
         return {

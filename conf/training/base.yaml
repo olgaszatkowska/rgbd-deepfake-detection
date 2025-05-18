@@ -1,2 +1,4 @@
-learning_rate: 1e-4
 accelerator: cpu
+
+learning_rate: 1e-4
+decay_factor: 0.8

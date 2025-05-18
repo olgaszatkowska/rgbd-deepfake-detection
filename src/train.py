@@ -19,7 +19,7 @@ def main(cfg: DictConfig):
     data_module.setup()
 
     network = RGBDNet(cfg=cfg)
-    model = RGBDDetector(model=network, lr=cfg.training.learning_rate)
+    model = RGBDDetector(cfg=cfg, model=network, lr=cfg.training.learning_rate)
     model_name = cfg.model.name
 
     checkpoint_callback = ModelCheckpoint(
