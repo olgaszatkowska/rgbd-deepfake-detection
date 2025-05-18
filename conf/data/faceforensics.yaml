@@ -10,10 +10,12 @@ use_attacks: true
 use_depth: true
 
 depth_type: "depth" # 'depth' or 'hha' or 'None'
-input_type: "rgbd" # 'rgb' or 'rgbd' or 'd' 
-
-batch_size: 192
+input_type: "rgbd" # 'rgb' or 'rgbd' or 'd'
+batch_size: 16
 num_workers: 8
+pin_memory: false
+augmentation: false
+black_box_attack: False
 
 mean: [0.485,0.456,0.406]
 std: [0.229,0.224,0.225]

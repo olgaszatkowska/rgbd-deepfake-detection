@@ -1,5 +1,8 @@
 # This file was copied from https://github.com/gleporoni/rgbd-depthfake/blob/main/src/data/data_loader.py
 # Commit id: 7c4c91d14b1a6508566fc0013364d50e2dd31898
+# The difference between original file and this is at self.transform definition.
+# All input images are resized to 224x224, matching the expected
+# input size of ResNet-based backbones used in this project.
 
 from typing import Any, Union, List, Optional
 
@@ -30,7 +33,10 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             ]
         )
 
-        self.transform = transforms.Compose(transform)
+        self.transform = transforms.Compose(transform + [
+            transforms.Resize((224, 224)),
+        ])
+
         self.batch_size = self.conf.data.batch_size
 
         self.augmentation0 = transforms.Compose(
@@ -104,8 +110,8 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             self.train_data,
             batch_size=self.batch_size,
             num_workers=self.conf.data.num_workers,
-            pin_memory=True,
-            persistent_workers=True,
+            pin_memory=self.conf.data.pin_memory,
+            persistent_workers=self.conf.data.num_workers > 0,
             shuffle=True,
         )
 
@@ -114,8 +120,8 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             self.val_data,
             batch_size=self.batch_size,
             num_workers=self.conf.data.num_workers,
-            pin_memory=True,
-            persistent_workers=True,
+            pin_memory=self.conf.data.pin_memory,
+            persistent_workers=self.conf.data.num_workers > 0,
             shuffle=False,
         )
 
@@ -124,8 +130,8 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             self.test_data,
             batch_size=self.batch_size,
             num_workers=self.conf.data.num_workers,
-            pin_memory=True,
-            persistent_workers=True,
+            pin_memory=self.conf.data.pin_memory,
+            persistent_workers=self.conf.data.num_workers > 0,
             shuffle=False,
         )
 

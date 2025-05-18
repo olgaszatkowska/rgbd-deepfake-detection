@@ -1,6 +1,6 @@
 defaults:
   - _self_ 
-  - model: playground
-  - training: playground
+  - model: attention
+  - training: base
   - logging: basic
   - data: faceforensics

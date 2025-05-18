@@ -185,3 +185,6 @@ dataset
 # Experiments
 experiments/
 experiments.py
+lightning_logs_tf/
+lightning_logs_csv/
+checkpoints/
