@@ -1,0 +1,5 @@
+defaults:
+  - _self_ 
+  - shared
+  - model: transformer
+  - training: transformer

@@ -5,12 +5,24 @@ from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
+import torch.nn as nn
 
-from model.network import RGBDNet
-from model.detector import RGBDDetector
+from models import DualBranchRGBDNet, TransformerRGDBNet, RGBDDetector
 from data.data_loader import FaceForensicsPlusPlus
 
 logger = logging.getLogger(__name__)
+
+
+def dehydrate_model(cfg: DictConfig) -> nn.Module:
+    model_type = cfg.model.type
+
+    if model_type == "transformer":
+        return TransformerRGDBNet(cfg)
+    
+    if model_type == "dual_branch":
+        return DualBranchRGBDNet(cfg)
+    
+    raise Exception("Unknown network type")
 
 
 @hydra.main(config_path="../conf", config_name="config", version_base="1.3")
@@ -18,7 +30,7 @@ def main(cfg: DictConfig):
     data_module = FaceForensicsPlusPlus(cfg)
     data_module.setup()
 
-    network = RGBDNet(cfg=cfg)
+    network = dehydrate_model(cfg)
     model = RGBDDetector(cfg=cfg, model=network, lr=cfg.training.learning_rate)
     model_name = cfg.model.name
 

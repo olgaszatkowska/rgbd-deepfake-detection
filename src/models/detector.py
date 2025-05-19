@@ -9,9 +9,12 @@ class RGBDDetector(pl.LightningModule):
         self.model = model
         self.lr = lr
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.accuracy = Accuracy(task="multiclass", num_classes=2)
+        self.train_accuracy = Accuracy(task="multiclass", num_classes=2)
+        self.val_accuracy = Accuracy(task="multiclass", num_classes=2)
 
-        # Load config
+        self.train_loss_epoch = []
+        self.val_loss_epoch = []
+
         self.cfg = cfg
 
     def forward(self, x):
@@ -21,24 +24,36 @@ class RGBDDetector(pl.LightningModule):
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
-        acc = self.accuracy(logits, y)
+        acc = self.train_accuracy(logits, y)
         self.log("train_loss", loss)
         self.log("train_acc", acc, prog_bar=True)
-        return loss
+        return {"loss": loss, "acc": acc}
 
     def validation_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
-        acc = self.accuracy(logits, y)
+        acc = self.val_accuracy(logits, y)
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_acc", acc, prog_bar=True)
+        return {"val_loss": loss, "val_acc": acc}
+
+    def on_validation_epoch_end(self):
+        train_loss = self.trainer.callback_metrics.get("train_loss")
+        val_loss = self.trainer.callback_metrics.get("val_loss")
+        train_acc = self.trainer.callback_metrics.get("train_acc")
+        val_acc = self.trainer.callback_metrics.get("val_acc")
+
+        if train_loss and val_loss:
+            self.log("loss_gap", train_loss - val_loss)
+        if train_acc and val_acc:
+            self.log("acc_gap", train_acc - val_acc)
 
     def test_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
-        acc = self.accuracy(logits, y)
+        acc = self.val_accuracy(logits, y)
         self.log("test_loss", loss)
         self.log("test_acc", acc)
 

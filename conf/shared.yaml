@@ -1,6 +1,3 @@
 defaults:
-  - _self_ 
-  - model: attention
-  - training: base
   - logging: basic
   - data: faceforensics
