@@ -20,46 +20,40 @@ class GuidedSEBlock(nn.Module):
         )
 
     def forward(self, depth_feat, rgb_feat):
-        # Generate attention from RGB features
-        rgb_attn = self.rgb_pool(rgb_feat)  # [B, C, 1, 1]
-        scale = self.rgb_fc(rgb_attn)  # [B, C, 1, 1]
-
-        # Apply to depth features
+        rgb_attn = self.rgb_pool(rgb_feat)
+        scale = self.rgb_fc(rgb_attn)
         return depth_feat * scale
 
 
-class RGBDNet(nn.Module):
+class DualBranchRGBDNet(nn.Module):
     """
     Dual-branch RGBD network with attention from RGB guiding the Depth branch.
     """
 
     def __init__(self, cfg, num_classes=2, pretrained=True):
-        super(RGBDNet, self).__init__()
+        super(DualBranchRGBDNet, self).__init__()
 
         # Load config
         self.cfg = cfg
 
-        # RGB backbone
-        rgb_backbone = models.resnet18(pretrained=pretrained)
-        self.rgb_base = nn.Sequential(
-            *list(rgb_backbone.children())[:-2]
-        )  # Remove avgpool and fc
+        # RGB MobileNetV2
+        rgb_model = models.mobilenet_v2(pretrained=pretrained).features
+        self.rgb_base = rgb_model
 
-        # Depth backbone
-        depth_backbone = models.resnet18(pretrained=pretrained)
-        depth_backbone.conv1 = nn.Conv2d(
-            1, 64, kernel_size=7, stride=2, padding=3, bias=False
-        )
-        self.depth_base = nn.Sequential(*list(depth_backbone.children())[:-2])
+        # Depth MobileNetV2 (adapted for 1-channel input)
+        depth_model = models.mobilenet_v2(pretrained=pretrained)
+        depth_model.features[0][0] = nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        self.depth_base = depth_model.features
 
-        # Guided attention module: RGB guides Depth
-        self.guided_attn = GuidedSEBlock(channels=512)
+        # Use GuidedSEBlock if enabled
+        self.attention = cfg.model.attention
+        self.guided_attn = GuidedSEBlock(channels=1280) if self.attention else None
 
-        # Fusion + classification head
+        # Global pooling and classifier
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512 * 2, 256),
+            nn.Linear(1280 * 2, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes),
