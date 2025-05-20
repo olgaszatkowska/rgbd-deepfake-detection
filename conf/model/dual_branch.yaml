@@ -1,3 +1,5 @@
 name: attention
+
 type: dual_branch
 attention: false
+dropout: 0.3

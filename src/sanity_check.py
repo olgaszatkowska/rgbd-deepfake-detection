@@ -3,15 +3,18 @@ from torchsummary import summary
 import hydra
 from omegaconf import DictConfig
 
-from model.dual_branch_network import DualBranchRGBDNet
+from models import DualBranchRGBDNet
 from data.data_loader import FaceForensicsPlusPlus
+from utils import dehydrate_model
 
 
 def count_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-@hydra.main(config_path="../conf", config_name="config", version_base="1.3")
+@hydra.main(
+    config_path="../conf", config_name="dual_branch_attention", version_base="1.3"
+)
 def check(cfg: DictConfig):
     # Initialize datamodule
     data_module = FaceForensicsPlusPlus(cfg)
@@ -25,7 +28,7 @@ def check(cfg: DictConfig):
     print(f"Validation set size: {val_size}")
 
     # Initialize model
-    model = DualBranchRGBDNet(cfg)
+    model = dehydrate_model(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

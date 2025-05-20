@@ -6,7 +6,7 @@ import torchvision.models as models
 class GuidedSEBlock(nn.Module):
     """
     Squeeze-and-Excitation block with external guidance.
-    Uses features from a guidance branch (e.g. RGB) to modulate another (e.g. Depth).
+    Uses features from a guidance branch RGB to modulate another DEPTH
     """
 
     def __init__(self, channels, reduction=16):
@@ -42,7 +42,9 @@ class DualBranchRGBDNet(nn.Module):
 
         # Depth MobileNetV2 (adapted for 1-channel input)
         depth_model = models.mobilenet_v2(pretrained=pretrained)
-        depth_model.features[0][0] = nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        depth_model.features[0][0] = nn.Conv2d(
+            1, 32, kernel_size=3, stride=2, padding=1, bias=False
+        )
         self.depth_base = depth_model.features
 
         # Use GuidedSEBlock if enabled

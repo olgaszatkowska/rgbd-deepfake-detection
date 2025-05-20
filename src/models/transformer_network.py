@@ -40,7 +40,7 @@ class TransformerRGDBNet(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(self.token_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(self.cfg.model.dropout),
             nn.Linear(256, num_classes),
         )
 
@@ -49,17 +49,17 @@ class TransformerRGDBNet(nn.Module):
         depth = x[:, 3:, :, :]
 
         # Extract feature maps
-        rgb_feat = self.rgb_base(rgb)      # [B, 512, H, W]
+        rgb_feat = self.rgb_base(rgb)  # [B, 512, H, W]
         depth_feat = self.depth_base(depth)  # [B, 512, H, W]
 
         # Flatten spatial dimensions to tokens: [B, C, H, W] -> [B, HW, C]
-        rgb_tokens = rearrange(rgb_feat, 'b c h w -> b (h w) c')
-        depth_tokens = rearrange(depth_feat, 'b c h w -> b (h w) c')
+        rgb_tokens = rearrange(rgb_feat, "b c h w -> b (h w) c")
+        depth_tokens = rearrange(depth_feat, "b c h w -> b (h w) c")
 
         # Concatenate and prepend [CLS] token
         tokens = torch.cat([rgb_tokens, depth_tokens], dim=1)  # [B, 2*HW, C]
         cls_tokens = self.cls_token.expand(x.size(0), -1, -1)  # [B, 1, C]
-        tokens = torch.cat([cls_tokens, tokens], dim=1)        # [B, 1 + 2*HW, C]
+        tokens = torch.cat([cls_tokens, tokens], dim=1)  # [B, 1 + 2*HW, C]
 
         # Transformer encoding
         encoded = self.transformer(tokens)

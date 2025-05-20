@@ -1,3 +1,5 @@
 name: transformer
+
 type: transformer
 attention: false
+dropout: 0.3
