@@ -1,0 +1,16 @@
+defaults:
+  - _self_ 
+  - common
+  - model: dual_branch
+  - training: base
+
+model:
+  name: dual_branch_v1
+  dropout: 0.3
+  init_weights_method: kaiming
+
+training:
+  learning_rate: 1e-4
+  max_epochs: 20
+  scheduler_type: CosineAnnealingLR
+  cosine_T_max: 20

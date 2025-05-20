@@ -1,5 +1,8 @@
-name: attention
+name: dual_branch
 
 type: dual_branch
 attention: false
+
+# Parameters default values
 dropout: 0.3
+init_weights_method: kaiming # kaiming or None

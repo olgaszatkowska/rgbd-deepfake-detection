@@ -1,5 +1,0 @@
-defaults:
-  - base
-
-learning_rate: 1e-4
-decay_factor: 0.5

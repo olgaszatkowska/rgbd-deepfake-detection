@@ -1,5 +1,6 @@
 name: transformer
 
 type: transformer
-attention: false
+
+# Parameters default values
 dropout: 0.3

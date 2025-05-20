@@ -14,10 +14,7 @@ from utils import dehydrate_model
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(
-    config_path="../conf", config_name="dual_branch_attention", version_base="1.3"
-)
-def main(cfg: DictConfig):
+def train_from_config(cfg: DictConfig):
     data_module = FaceForensicsPlusPlus(cfg)
     data_module.setup()
 
@@ -37,7 +34,7 @@ def main(cfg: DictConfig):
     logger_csv = CSVLogger("lightning_logs_csv", name=model_name)
 
     trainer = Trainer(
-        max_epochs=20,
+        max_epochs=cfg.training.max_epochs,
         accelerator=cfg.training.accelerator,
         callbacks=[checkpoint_callback],
         devices=1,
@@ -47,5 +44,12 @@ def main(cfg: DictConfig):
     trainer.fit(model, datamodule=data_module)
 
 
+
+@hydra.main(
+    config_path="../conf", config_name="dual_branch_attention_v1", version_base="1.3"
+)
+def train_dual_branch_attention(cfg: DictConfig):
+    train_from_config(cfg=cfg)
+
 if __name__ == "__main__":
-    main()
+    train_dual_branch_attention()

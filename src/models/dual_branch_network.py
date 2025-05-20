@@ -55,11 +55,26 @@ class DualBranchRGBDNet(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(1280 * 2, 256),
+            nn.Linear(1280 * 2, 512),
+            nn.LayerNorm(512),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(self.cfg.model.dropout),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(256, num_classes),
         )
+
+        if self.cfg.model.init_weights_method == "kaiming":
+            self._init_kaiming_weights()
+
+    def _init_kaiming_weights(self):
+        for m in self.classifier:
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                if m.bias is None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         rgb = x[:, :3, :, :]

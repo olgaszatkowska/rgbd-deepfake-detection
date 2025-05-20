@@ -1,5 +1,0 @@
-defaults:
-  - _self_ 
-  - shared
-  - model: dual_branch_attention
-  - training: dual_branch_attention

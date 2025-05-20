@@ -2,6 +2,8 @@ import pytorch_lightning as pl
 import torch
 from torchmetrics import Accuracy
 
+from utils import dehydrate_scheduler_config
+
 
 class RGBDDetector(pl.LightningModule):
     def __init__(self, cfg, model, lr=1e-4):
@@ -62,14 +64,9 @@ class RGBDDetector(pl.LightningModule):
             self.model.parameters(), lr=self.lr, weight_decay=1e-4
         )
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=self.cfg.training.decay_factor, patience=2
-        )
+        scheduler_config = dehydrate_scheduler_config(self.cfg, optimizer)
 
         return {
             "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "monitor": "val_loss",
-            },
+            **scheduler_config
         }
