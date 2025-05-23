@@ -49,7 +49,7 @@ def dehydrate_scheduler_config(
     return {}
 
 
-def dehydrate_classifier_head(cfg: DictConfig, num_classes: int):
+def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequential:
     name = cfg.model.classifier_head.name
 
     if name == "dual_branch_v1":

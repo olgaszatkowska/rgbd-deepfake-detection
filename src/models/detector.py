@@ -1,12 +1,15 @@
 import pytorch_lightning as pl
 import torch
+from torch import Tensor
+from torch.optim import Optimizer
 from torchmetrics import Accuracy
+from typing import Any, Dict, Optional
 
 from models.dehydrate import dehydrate_scheduler_config
 
 
 class RGBDDetector(pl.LightningModule):
-    def __init__(self, cfg, model, lr=1e-4):
+    def __init__(self, cfg: Any, model: torch.nn.Module, lr: float = 1e-4) -> None:
         super().__init__()
         self.model = model
         self.lr = lr
@@ -14,15 +17,17 @@ class RGBDDetector(pl.LightningModule):
         self.train_accuracy = Accuracy(task="multiclass", num_classes=2)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=2)
 
-        self.train_loss_epoch = []
-        self.val_loss_epoch = []
+        self.train_loss_epoch: list[float] = []
+        self.val_loss_epoch: list[float] = []
 
         self.cfg = cfg
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(
+        self, batch: Dict[str, Tensor], batch_idx: int
+    ) -> Dict[str, Tensor]:
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
@@ -31,7 +36,9 @@ class RGBDDetector(pl.LightningModule):
         self.log("train_acc", acc, prog_bar=True)
         return {"loss": loss, "acc": acc}
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self, batch: Dict[str, Tensor], batch_idx: int
+    ) -> Dict[str, Tensor]:
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
@@ -40,7 +47,7 @@ class RGBDDetector(pl.LightningModule):
         self.log("val_acc", acc, prog_bar=True)
         return {"val_loss": loss, "val_acc": acc}
 
-    def on_validation_epoch_end(self):
+    def on_validation_epoch_end(self) -> None:
         train_loss = self.trainer.callback_metrics.get("train_loss")
         val_loss = self.trainer.callback_metrics.get("val_loss")
         train_acc = self.trainer.callback_metrics.get("train_acc")
@@ -51,7 +58,7 @@ class RGBDDetector(pl.LightningModule):
         if train_acc and val_acc:
             self.log("acc_gap", train_acc - val_acc)
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch: Dict[str, Tensor], batch_idx: int) -> None:
         x, y = batch["image"], batch["label"]
         logits = self(x)
         loss = self.criterion(logits, y)
@@ -59,7 +66,7 @@ class RGBDDetector(pl.LightningModule):
         self.log("test_loss", loss)
         self.log("test_acc", acc)
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> Dict[str, Any]:
         lr = self.cfg.training.learning_rate
         optimizer = torch.optim.Adam(
             [
