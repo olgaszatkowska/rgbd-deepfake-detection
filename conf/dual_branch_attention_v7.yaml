@@ -1,0 +1,18 @@
+defaults:
+- _self_
+- common
+- model: dual_branch_attention
+- training: base
+model:
+  classifier_head:
+    name: dual_branch_v2
+  dropout: 0.4
+  init_weights_method: kaiming
+  name: dual_branch_attention_v7
+training:
+  learning_rate: 0.0001
+  max_epochs: 25
+  scheduler:
+    decay_factor: 0.5
+    monitor: val_loss
+    type: ReduceLROnPlateau

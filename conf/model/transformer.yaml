@@ -1,6 +1,4 @@
-name: transformer
-
 type: transformer
 
-# Parameters default values
-dropout: 0.3
+# Parameters exampledefault values
+# dropout: 0.3

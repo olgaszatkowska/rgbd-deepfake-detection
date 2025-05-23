@@ -1,11 +1,18 @@
 accelerator: cpu
 
-learning_rate: 1e-4
-max_epochs: 20
+early_stopping:
+  use: true
+  patience: 4
 
-scheduler_type: CosineAnnealingLR # CosineAnnealingLR or ReduceLROnPlateau
-# CosineAnnealingLR params
-cosine_T_max: 20
-# ReduceLROnPlateau
-decay_factor: 0.8
-monitor: val_loss
+# Parameters exampled values
+# learning_rate: 1e-4
+# max_epochs: 20
+
+# scheduler:
+#   type: CosineAnnealingLR
+#   cosine_T_max: 20
+# 
+# scheduler:
+#   type: ReduceLROnPlateau
+#   decay_factor: 0.8
+#   monitor: val_loss

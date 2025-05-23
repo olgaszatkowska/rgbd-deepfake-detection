@@ -3,9 +3,8 @@ from torchsummary import summary
 import hydra
 from omegaconf import DictConfig
 
-from models import DualBranchRGBDNet
 from data.data_loader import FaceForensicsPlusPlus
-from utils import dehydrate_model
+from models.dehydrate import dehydrate_model
 
 
 def count_params(model):
@@ -13,7 +12,7 @@ def count_params(model):
 
 
 @hydra.main(
-    config_path="../conf", config_name="dual_branch_attention", version_base="1.3"
+    config_path="../conf", config_name="dual_branch_attention_v1", version_base="1.3"
 )
 def check(cfg: DictConfig):
     # Initialize datamodule

@@ -188,3 +188,4 @@ experiments.py
 lightning_logs_tf/
 lightning_logs_csv/
 checkpoints/
+generate_configs.py

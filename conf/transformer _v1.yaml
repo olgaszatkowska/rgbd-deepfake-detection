@@ -11,5 +11,6 @@ model:
 training:
   learning_rate: 1e-4
   max_epochs: 20
-  scheduler_type: CosineAnnealingLR
-  cosine_T_max: 20
+  scheduler:
+    type: CosineAnnealingLR
+    cosine_T_max: 20

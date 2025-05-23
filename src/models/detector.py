@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch
 from torchmetrics import Accuracy
 
-from utils import dehydrate_scheduler_config
+from models.dehydrate import dehydrate_scheduler_config
 
 
 class RGBDDetector(pl.LightningModule):
@@ -60,13 +60,21 @@ class RGBDDetector(pl.LightningModule):
         self.log("test_acc", acc)
 
     def configure_optimizers(self):
+        lr = self.cfg.training.learning_rate
         optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.lr, weight_decay=1e-4
+            [
+                {"params": self.model.rgb_base.parameters(), "lr": lr * 0.1},
+                {"params": self.model.depth_base.parameters(), "lr": lr * 0.1},
+                {"params": self.model.classifier.parameters(), "lr": lr},
+                *(
+                    [{"params": self.model.guided_attn.parameters(), "lr": lr * 0.5}]
+                    if self.model.use_attention
+                    else []
+                ),
+            ],
+            weight_decay=1e-4,
         )
 
         scheduler_config = dehydrate_scheduler_config(self.cfg, optimizer)
 
-        return {
-            "optimizer": optimizer,
-            **scheduler_config
-        }
+        return {"optimizer": optimizer, **scheduler_config}

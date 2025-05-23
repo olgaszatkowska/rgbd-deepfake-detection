@@ -14,6 +14,7 @@ Pillow>=8.0
 pandas >= 1.3.0, <2.2
 
 # Logging & Visualization
+tensorflow
 tensorboard>=2.10
 torchsummary
 einops>=0.6.0

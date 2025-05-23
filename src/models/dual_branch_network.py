@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
+from models.dehydrate import dehydrate_classifier_head
+
 
 class GuidedSEBlock(nn.Module):
     """
@@ -48,23 +50,12 @@ class DualBranchRGBDNet(nn.Module):
         self.depth_base = depth_model.features
 
         # Use GuidedSEBlock if enabled
-        self.attention = cfg.model.attention
-        self.guided_attn = GuidedSEBlock(channels=1280) if self.attention else None
+        self.use_attention = cfg.model.use_attention
+        self.guided_attn = GuidedSEBlock(channels=1280) if self.use_attention else None
 
         # Global pooling and classifier
         self.pool = nn.AdaptiveAvgPool2d(1)
-        self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(1280 * 2, 512),
-            nn.LayerNorm(512),
-            nn.ReLU(),
-            nn.Dropout(self.cfg.model.dropout),
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, num_classes),
-        )
+        self.classifier = dehydrate_classifier_head(cfg, num_classes)
 
         if self.cfg.model.init_weights_method == "kaiming":
             self._init_kaiming_weights()
@@ -85,7 +76,7 @@ class DualBranchRGBDNet(nn.Module):
         depth_feat = self.depth_base(depth)
 
         # Use RGB features to guide attention in Depth features
-        if self.cfg.model.attention:
+        if self.cfg.model.use_attention:
             depth_feat = self.guided_attn(depth_feat, rgb_feat)
 
         # Global pooling
