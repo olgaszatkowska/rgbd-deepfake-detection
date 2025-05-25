@@ -18,3 +18,5 @@ tensorflow
 tensorboard>=2.10
 torchsummary
 einops>=0.6.0
+scikit-learn
+matplotlib

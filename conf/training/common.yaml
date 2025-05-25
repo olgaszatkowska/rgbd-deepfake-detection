@@ -1,0 +1,5 @@
+accelerator: cpu
+
+max_epochs: 15
+
+early_stopping_patience: 5

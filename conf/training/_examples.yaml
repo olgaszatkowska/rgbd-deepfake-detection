@@ -1,0 +1,19 @@
+# Parameters example values
+learning_rate: 1e-4
+max_epochs: 20
+label_smoothing: 0.1
+
+# Schedulers
+scheduler:
+  type: CosineAnnealingLR
+  cosine_T_max: 20
+
+scheduler:
+  type: ReduceLROnPlateau
+  decay_factor: 0.8
+  monitor: val_loss
+
+scheduler:
+  type: OneCycleLR
+  pct_start: 0.3
+  steps_per_epoch: 968

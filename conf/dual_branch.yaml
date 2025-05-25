@@ -1,0 +1,5 @@
+defaults:
+- common
+- model: dual_branch
+- training: dual_branch
+- _self_

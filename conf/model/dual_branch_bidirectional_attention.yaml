@@ -2,8 +2,7 @@ defaults:
   - common_dual_branch
   - _self_
 
-name: dual_branch
+name: dual_branch_bidirectional_attention
 type: dual_branch
 use_rgb_guided_attention: false
-use_bidirectional_attention: false
-
+use_bidirectional_attention: true

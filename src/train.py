@@ -1,17 +1,24 @@
 import logging
+import sys
+from typing import Optional
 
 import hydra
 from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
-import torch.nn as nn
 
 from models import RGBDDetector
 from data.data_loader import FaceForensicsPlusPlus
 from models.dehydrate import dehydrate_model
 
 logger = logging.getLogger(__name__)
+
+config_name: Optional[str] = None
+
+if len(sys.argv) > 1:
+    config_name = sys.argv[1]
+    sys.argv = sys.argv[:1]
 
 
 def train_from_config(cfg: DictConfig):
@@ -32,11 +39,11 @@ def train_from_config(cfg: DictConfig):
 
     callbacks = [checkpoint_callback]
 
-    if cfg.training.early_stopping.use:
+    if cfg.training.early_stopping_patience:
         early_stopping_callback = EarlyStopping(
             monitor="val_loss",
             mode="min",
-            patience=cfg.training.early_stopping.patience,
+            patience=cfg.training.early_stopping_patience,
             verbose=True,
         )
         callbacks.append(early_stopping_callback)
@@ -55,9 +62,7 @@ def train_from_config(cfg: DictConfig):
     trainer.fit(model, datamodule=data_module)
 
 
-@hydra.main(
-    config_path="../conf", config_name="dual_branch_attention_v7", version_base="1.3"
-)
+@hydra.main(config_path="../conf", config_name=config_name, version_base="1.3")
 def train_dual_branch_attention(cfg: DictConfig):
     train_from_config(cfg=cfg)
 

@@ -1,0 +1,5 @@
+defaults:
+- common
+- model: dual_branch_bidirectional_attention
+- training: dual_branch
+- _self_

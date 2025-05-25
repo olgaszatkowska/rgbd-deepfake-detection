@@ -46,6 +46,26 @@ def dehydrate_scheduler_config(
             }
         }
 
+    if scheduler_type == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=cfg.training.learning_rate,
+            steps_per_epoch=cfg.training.scheduler.steps_per_epoch,
+            epochs=cfg.training.max_epochs,
+            pct_start=cfg.training.scheduler.get("pct_start", 0.3),
+            anneal_strategy="cos",
+            div_factor=25.0,
+            final_div_factor=1e4,
+        )
+
+        return {
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            }
+        }
+
     return {}
 
 
@@ -75,4 +95,25 @@ def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequentia
             nn.Linear(256, num_classes),
         )
 
+    if name == "dual_branch_v3":
+        return nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(1280 * 2, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Dropout(cfg.model.dropout),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, num_classes),
+        )
+
     raise Exception("Unknown classifier head")
+
+
+def dehydrate_loss(cfg: DictConfig) -> nn.CrossEntropyLoss:
+    if cfg.training.label_smoothing:
+        return torch.nn.CrossEntropyLoss(label_smoothing=cfg.training.label_smoothing)
+
+    return torch.nn.CrossEntropyLoss()

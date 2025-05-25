@@ -52,9 +52,19 @@ class DualBranchRGBDNet(nn.Module):
         self.depth_base = depth_model.features
 
         # Use GuidedSEBlock if enabled
-        self.use_attention: bool = cfg.model.use_attention
-        self.guided_attn: nn.Module | None = (
-            GuidedSEBlock(channels=1280) if self.use_attention else None
+        self.use_rgb_guided_attention: bool = cfg.model.use_rgb_guided_attention
+        self.use_bidirectional_attention: bool = cfg.model.use_bidirectional_attention
+
+        use_rgb_guided_block = (
+            self.use_rgb_guided_attention or self.use_bidirectional_attention
+        )
+        uses_depth_guided_block = self.use_bidirectional_attention
+
+        self.rgb_guides_depth: nn.Module | None = (
+            GuidedSEBlock(channels=1280) if use_rgb_guided_block else None
+        )
+        self.depth_guides_rgb: nn.Module | None = (
+            GuidedSEBlock(channels=1280) if uses_depth_guided_block else None
         )
 
         # Global pooling and classifier
@@ -79,9 +89,12 @@ class DualBranchRGBDNet(nn.Module):
         rgb_feat = self.rgb_base(rgb)
         depth_feat = self.depth_base(depth)
 
-        # Use RGB features to guide attention in Depth features
-        if self.use_attention and self.guided_attn is not None:
-            depth_feat = self.guided_attn(depth_feat, rgb_feat)
+        if self.use_bidirectional_attention:
+            # Use original (unmodulated) features to avoid feedback loop
+            depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat.detach())
+            rgb_feat = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
+        elif self.use_rgb_guided_attention:
+            depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat)
 
         # Global pooling
         rgb_feat = self.pool(rgb_feat)

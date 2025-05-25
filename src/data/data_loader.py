@@ -1,8 +1,11 @@
 # This file was copied from https://github.com/gleporoni/rgbd-depthfake/blob/main/src/data/data_loader.py
 # Commit id: 7c4c91d14b1a6508566fc0013364d50e2dd31898
-# The difference between original file and this is at self.transform definition.
+
+# Following changes were applied:
 # All input images are resized to 224x224, matching the expected
 # input size of ResNet-based backbones used in this project.
+# For all DataLoader invocations drop_last=True argument was added
+# to prevent BatchNorm1d failure.
 
 from typing import Any, Union, List, Optional
 
@@ -116,6 +119,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             pin_memory=self.conf.data.pin_memory,
             persistent_workers=self.conf.data.num_workers > 0,
             shuffle=True,
+            drop_last=True,
         )
 
     def val_dataloader(self, *args, **kwargs) -> Union[DataLoader, List[DataLoader]]:
@@ -126,6 +130,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             pin_memory=self.conf.data.pin_memory,
             persistent_workers=self.conf.data.num_workers > 0,
             shuffle=False,
+            drop_last=True,
         )
 
     def test_dataloader(self, *args, **kwargs) -> Union[DataLoader, List[DataLoader]]:
@@ -136,6 +141,7 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
             pin_memory=self.conf.data.pin_memory,
             persistent_workers=self.conf.data.num_workers > 0,
             shuffle=False,
+            drop_last=True,
         )
 
     def on_before_batch_transfer(self, batch, dataloader_idx):
