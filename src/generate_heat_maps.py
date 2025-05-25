@@ -103,68 +103,71 @@ def main(cfg: DictConfig):
     save_dir = Path(f"heat_maps/{cfg.model.name}/combined")
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    batch = next(iter(val_loader))
-    images = batch["image"].to(device)
-    labels = batch["label"]
+    num_batches = 3  # Number of batches to process
+    sample_counter = 0
 
-    cams_rgb = generate_grad_cam(model, images, "rgb")
-    cams_depth = generate_grad_cam(model, images, "depth")
+    for batch_idx, batch in enumerate(val_loader):
+        if batch_idx >= num_batches:
+            break
 
-    outputs = model(images)
-    preds = outputs.argmax(dim=1).detach().cpu()
+        images = batch["image"].to(device)
+        labels = batch["label"]
+        outputs = model(images)
+        preds = outputs.argmax(dim=1).detach().cpu()
 
-    for i in range(min(10, images.size(0))):
-        image_tensor = images[i].detach().cpu()
-        cam_rgb = cams_rgb[i].detach().cpu()
-        cam_depth = cams_depth[i].detach().cpu()
+        cams_rgb = generate_grad_cam(model, images, "rgb")
+        cams_depth = generate_grad_cam(model, images, "depth")
 
-        cam_rgb = torch.nn.functional.interpolate(
-            cam_rgb.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
-        ).squeeze()
+        for i in range(images.size(0)):
+            image_tensor = images[i].detach().cpu()
+            cam_rgb = cams_rgb[i].detach().cpu()
+            cam_depth = cams_depth[i].detach().cpu()
 
-        cam_depth = torch.nn.functional.interpolate(
-            cam_depth.unsqueeze(0),
-            size=(224, 224),
-            mode="bilinear",
-            align_corners=False,
-        ).squeeze()
+            cam_rgb = torch.nn.functional.interpolate(
+                cam_rgb.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
+            ).squeeze()
 
-        rgb_img = image_tensor[:3]
-        depth_img = image_tensor[3:4]
+            cam_depth = torch.nn.functional.interpolate(
+                cam_depth.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
+            ).squeeze()
 
-        def normalize(t):
-            return (t - t.min()) / (t.max() - t.min() + 1e-8)
+            rgb_img = image_tensor[:3]
+            depth_img = image_tensor[3:4]
 
-        rgb_img = normalize(rgb_img)
-        depth_img = normalize(depth_img)
+            def normalize(t):
+                return (t - t.min()) / (t.max() - t.min() + 1e-8)
 
-        input_rgb = F.to_pil_image(rgb_img)
-        input_depth = F.to_pil_image(depth_img.squeeze(0))
-        heatmap_rgb = F.to_pil_image(cam_rgb)
-        heatmap_depth = F.to_pil_image(cam_depth)
+            rgb_img = normalize(rgb_img)
+            depth_img = normalize(depth_img)
 
-        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+            input_rgb = F.to_pil_image(rgb_img)
+            input_depth = F.to_pil_image(depth_img.squeeze(0))
+            heatmap_rgb = F.to_pil_image(cam_rgb)
+            heatmap_depth = F.to_pil_image(cam_depth)
 
-        axs[0].imshow(input_rgb)
-        axs[0].axis("off")
+            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 
-        axs[1].imshow(input_rgb)
-        axs[1].imshow(heatmap_rgb, cmap="jet", alpha=0.5)
-        axs[1].axis("off")
+            axs[0].imshow(input_rgb)
+            axs[0].axis("off")
 
-        axs[2].imshow(input_depth, cmap="gray")
-        axs[2].imshow(heatmap_depth, cmap="jet", alpha=0.5)
-        axs[2].axis("off")
+            axs[1].imshow(input_rgb)
+            axs[1].imshow(heatmap_rgb, cmap="jet", alpha=0.5)
+            axs[1].axis("off")
 
-        fig.tight_layout()
+            axs[2].imshow(input_depth, cmap="gray")
+            axs[2].imshow(heatmap_depth, cmap="jet", alpha=0.5)
+            axs[2].axis("off")
 
-        pred = preds[i].item()
-        label = labels[i].item()
-        correctness = "correct" if pred == label else "wrong"
-        filename = f"sample_{i}_{correctness}.png"
+            fig.tight_layout()
 
-        fig.savefig(save_dir / filename, bbox_inches="tight")
-        plt.close(fig)
+            pred = preds[i].item()
+            label = labels[i].item()
+            correctness = "correct" if pred == label else "wrong"
+            filename = f"sample_{sample_counter}_{correctness}_{label}.png"
+
+            fig.savefig(save_dir / filename, bbox_inches="tight")
+            plt.close(fig)
+            sample_counter += 1
 
 
 if __name__ == "__main__":
