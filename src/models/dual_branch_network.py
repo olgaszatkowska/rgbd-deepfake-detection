@@ -95,7 +95,7 @@ class DualBranchRGBDNet(nn.Module):
             rgb_feat = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
         elif self.use_rgb_guided_attention:
             depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat)
-        
+
         if return_features:
             return rgb_feat, depth_feat
 

@@ -85,7 +85,8 @@ class RGBDDetector(pl.LightningModule):
         lr = self.cfg.training.learning_rate
 
         uses_rgb_guided_block = (
-            self.model.use_rgb_guided_attention or self.model.use_bidirectional_attention
+            self.model.use_rgb_guided_attention
+            or self.model.use_bidirectional_attention
         )
 
         uses_depth_guided_block = self.model.use_bidirectional_attention
