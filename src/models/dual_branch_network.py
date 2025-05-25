@@ -81,7 +81,7 @@ class DualBranchRGBDNet(nn.Module):
                 if m.bias is None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, return_features=False) -> Tensor:
         rgb = x[:, :3, :, :]
         depth = x[:, 3:, :, :]
 
@@ -95,6 +95,9 @@ class DualBranchRGBDNet(nn.Module):
             rgb_feat = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
         elif self.use_rgb_guided_attention:
             depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat)
+        
+        if return_features:
+            return rgb_feat, depth_feat
 
         # Global pooling
         rgb_feat = self.pool(rgb_feat)

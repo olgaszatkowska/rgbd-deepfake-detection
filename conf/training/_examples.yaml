@@ -6,7 +6,7 @@ label_smoothing: 0.1
 # Schedulers
 scheduler:
   type: CosineAnnealingLR
-  cosine_T_max: 20
+  cosine_T_max: 20 # number of epochs
 
 scheduler:
   type: ReduceLROnPlateau

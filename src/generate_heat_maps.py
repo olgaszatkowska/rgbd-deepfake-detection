@@ -14,67 +14,99 @@ from models import RGBDDetector
 from data.data_loader import FaceForensicsPlusPlus
 from models.dehydrate import dehydrate_model
 
-config_name: Optional[str] = None
-ckpt_filename: Optional[str] = None
-input_type: Optional[str] = None
+CONFIG_NAME: Optional[str] = None
+CKPT_FILENAME: Optional[str] = None
+INPUT_TYPE: Optional[str] = None
 
 if len(sys.argv) > 1:
-    config_name = sys.argv[1]
+    CONFIG_NAME = sys.argv[1]
 if len(sys.argv) > 2:
-    ckpt_filename = sys.argv[2]
+    CKPT_FILENAME = sys.argv[2]
 if len(sys.argv) > 3:
-    input_type = sys.argv[3]
+    INPUT_TYPE = sys.argv[3]
 
 sys.argv = sys.argv[:1]
 
-assert input_type in ["depth", "rgb"], "Invalid or missing input type"
-assert config_name, "Missing config name"
-assert ckpt_filename, "Missing checkpoint filename"
+assert CONFIG_NAME, "Missing config name"
+assert CKPT_FILENAME, "Missing checkpoint filename"
+assert INPUT_TYPE in ["depth", "rgb"], "Invalid or missing input type"
 
 
-@hydra.main(config_path="../conf", config_name=config_name, version_base="1.3")
 def load_model(cfg: DictConfig):
     network = dehydrate_model(cfg)
     detector = RGBDDetector.load_from_checkpoint(
-        f"checkpoints/{ckpt_filename}", cfg=cfg, model=network
+        f"checkpoints/{CKPT_FILENAME}.ckpt", cfg=cfg, model=network
     )
 
     return detector.model
 
 
 def generate_grad_cam(
-    model: Module, input_tensor: Tensor, target_class: Optional[int] = None
+    model: Module,
+    input_tensor: Tensor,
+    input_type: str,
+    target_class: Optional[int] = None
 ) -> Tensor:
     model.eval()
-    input_tensor.requires_grad_()
-    rgb_feat, depth_feat = model(input_tensor, return_features=True)
 
-    if input_type == "depth":
-        feature_map = depth_feat
+    activations = []
+    gradients = []
+
+    # Choose branch
     if input_type == "rgb":
-        feature_map = rgb_feat
+        target_layer = model.rgb_base[-1]  # Last conv layer of RGB branch
+    elif input_type == "depth":
+        target_layer = model.depth_base[-1]  # Last conv layer of Depth branch
+    else:
+        raise ValueError("Invalid input_type")
 
-    feature_map.retain_grad()
+    def forward_hook(module, input, output):
+        activations.append(output)
+        output.retain_grad()
 
+    def backward_hook(module, grad_input, grad_output):
+        gradients.append(grad_output[0])
+
+    # Register hooks
+    handle_fwd = target_layer.register_forward_hook(forward_hook)
+    handle_bwd = target_layer.register_full_backward_hook(backward_hook)
+
+    input_tensor.requires_grad_()
     output = model(input_tensor)
+
     if target_class is None:
         target_class = output.argmax(dim=1)
 
     class_score = output[range(output.size(0)), target_class].sum()
+    model.zero_grad()
     class_score.backward()
 
-    gradients: Tensor = feature_map.grad  # [B, C, H, W]
-    weights: Tensor = gradients.mean(dim=(2, 3), keepdim=True)  # [B, C, 1, 1]
-    cam: Tensor = (weights * feature_map).sum(dim=1, keepdim=True)  # [B, 1, H, W]
+    # Cleanup hooks
+    handle_fwd.remove()
+    handle_bwd.remove()
+
+    if not gradients or not activations:
+        raise RuntimeError("Failed to capture gradients or activations for Grad-CAM.")
+
+    grad = gradients[0]       # [B, C, H, W]
+    activation = activations[0]  # [B, C, H, W]
+
+    weights = grad.mean(dim=(2, 3), keepdim=True)
+    cam = (weights * activation).sum(dim=1, keepdim=True)
     cam = torch.relu(cam)
-    cam = cam - cam.min()
-    cam = cam / (cam.max() + 1e-8)  # Normalize to [0,1]
+
+    # Normalize per image
+    cam_min = cam.flatten(1).min(dim=1)[0].view(-1, 1, 1, 1)
+    cam_max = cam.flatten(1).max(dim=1)[0].view(-1, 1, 1, 1)
+    cam = (cam - cam_min) / (cam_max - cam_min + 1e-8)
+
     return cam
 
 
-@hydra.main(config_path="../conf", config_name=config_name, version_base="1.3")
+
+@hydra.main(config_path="../conf", config_name=CONFIG_NAME, version_base="1.3")
 def main(cfg: DictConfig):
-    model = load_model(cfg, ckpt_filename)
+    model = load_model(cfg=cfg)
     device = torch.device(cfg.training.accelerator)
     model = model.to(device)
 
@@ -82,34 +114,44 @@ def main(cfg: DictConfig):
     datamodule.setup("fit")
     val_loader = datamodule.val_dataloader()
 
-    save_dir = Path(f"heat_maps/{cfg.model.name}")
+    save_dir = Path(f"heat_maps/{cfg.model.name}/{INPUT_TYPE}")
     save_dir.mkdir(parents=True, exist_ok=True)
 
     batch = next(iter(val_loader))
     images = batch["image"].to(device)
     labels = batch["label"]
 
-    cams = generate_grad_cam(model, images)
+    cams = generate_grad_cam(model, images, INPUT_TYPE)
 
     for i in range(min(10, images.size(0))):
-        image = images[i].detach().cpu()
-        cam = cams[i].squeeze().detach().cpu()
+        image_tensor = images[i].detach().cpu()
+        cam_tensor = cams[i].squeeze().detach().cpu()
 
-        # Take only RGB channels for visualization
-        if image.size(0) > 3:
-            image = image[:3]
+        # Take only the RGB channels
+        if image_tensor.size(0) > 3:
+            image_tensor = image_tensor[:3]
 
-        image = F.to_pil_image(image)
-        cam = F.to_pil_image(cam)
+        # Normalize to [0, 1] using dynamic min/max
+        min_val = image_tensor.min()
+        max_val = image_tensor.max()
+        image_tensor = (image_tensor - min_val) / (max_val - min_val + 1e-8)
 
+        # Convert to PIL image
+        input_img = F.to_pil_image(image_tensor)
+        cam_img = F.to_pil_image(cam_tensor)
+
+        sample_dir = save_dir / f"sample_{i}"
+        sample_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save input image
+        input_img.save(sample_dir / "input.png")
+
+        # Save heatmap overlay
         fig, ax = plt.subplots()
-        ax.imshow(image)
-        ax.imshow(cam, cmap="jet", alpha=0.5)
+        ax.imshow(input_img)
+        ax.imshow(cam_img, cmap="jet", alpha=0.5)
         ax.axis("off")
-
-        fig.savefig(
-            save_dir / f"sample_{i}_label_{labels[i].item()}.png", bbox_inches="tight"
-        )
+        fig.savefig(sample_dir / "map.png", bbox_inches="tight")
         plt.close(fig)
 
 

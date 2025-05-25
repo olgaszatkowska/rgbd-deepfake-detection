@@ -189,3 +189,4 @@ lightning_logs_tf/
 lightning_logs_csv/
 checkpoints/
 generate_configs.py
+heat_maps/
