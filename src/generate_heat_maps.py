@@ -37,7 +37,12 @@ def load_model(cfg: DictConfig):
     return detector.model
 
 
-def generate_grad_cam(model: Module, input_tensor: Tensor, input_type: str, target_class: Optional[int] = None) -> Tensor:
+def generate_grad_cam(
+    model: Module,
+    input_tensor: Tensor,
+    input_type: str,
+    target_class: Optional[int] = None,
+) -> Tensor:
     model.eval()
 
     activations = []
@@ -45,7 +50,7 @@ def generate_grad_cam(model: Module, input_tensor: Tensor, input_type: str, targ
 
     target_layer = {
         "rgb": model.rgb_base[-1],
-        "depth": model.depth_base[-1],
+        "depth": model.depth_base[-3],
     }[input_type]
 
     def forward_hook(module, input, output):
@@ -105,6 +110,9 @@ def main(cfg: DictConfig):
     cams_rgb = generate_grad_cam(model, images, "rgb")
     cams_depth = generate_grad_cam(model, images, "depth")
 
+    outputs = model(images)
+    preds = outputs.argmax(dim=1).detach().cpu()
+
     for i in range(min(10, images.size(0))):
         image_tensor = images[i].detach().cpu()
         cam_rgb = cams_rgb[i].detach().cpu()
@@ -115,13 +123,15 @@ def main(cfg: DictConfig):
         ).squeeze()
 
         cam_depth = torch.nn.functional.interpolate(
-            cam_depth.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
+            cam_depth.unsqueeze(0),
+            size=(224, 224),
+            mode="bilinear",
+            align_corners=False,
         ).squeeze()
 
         rgb_img = image_tensor[:3]
         depth_img = image_tensor[3:4]
 
-        # Normalize both inputs
         def normalize(t):
             return (t - t.min()) / (t.max() - t.min() + 1e-8)
 
@@ -130,22 +140,30 @@ def main(cfg: DictConfig):
 
         input_rgb = F.to_pil_image(rgb_img)
         input_depth = F.to_pil_image(depth_img.squeeze(0))
-
         heatmap_rgb = F.to_pil_image(cam_rgb)
         heatmap_depth = F.to_pil_image(cam_depth)
 
-        # Create figure with 2 columns: RGB and Depth
-        fig, axs = plt.subplots(1, 2, figsize=(8, 4))
+        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+
         axs[0].imshow(input_rgb)
-        axs[0].imshow(heatmap_rgb, cmap="jet", alpha=0.5)
         axs[0].axis("off")
 
-        axs[1].imshow(input_depth, cmap="gray")
-        axs[1].imshow(heatmap_depth, cmap="jet", alpha=0.5)
+        axs[1].imshow(input_rgb)
+        axs[1].imshow(heatmap_rgb, cmap="jet", alpha=0.5)
         axs[1].axis("off")
 
+        axs[2].imshow(input_depth, cmap="gray")
+        axs[2].imshow(heatmap_depth, cmap="jet", alpha=0.5)
+        axs[2].axis("off")
+
         fig.tight_layout()
-        fig.savefig(save_dir / f"sample_{i}.png", bbox_inches="tight")
+
+        pred = preds[i].item()
+        label = labels[i].item()
+        correctness = "correct" if pred == label else "wrong"
+        filename = f"sample_{i}_{correctness}.png"
+
+        fig.savefig(save_dir / filename, bbox_inches="tight")
         plt.close(fig)
 
 
