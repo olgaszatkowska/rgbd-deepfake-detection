@@ -2,6 +2,7 @@ import sys
 from typing import Optional
 from pathlib import Path
 
+import re
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -14,19 +15,23 @@ from models import RGBDDetector
 from data.data_loader import FaceForensicsPlusPlus
 from models.dehydrate import dehydrate_model
 
+def extract_config_name(filename):
+    match = re.match(r"(.+?)-epoch=\d+-val_acc=\d+\.\d+", filename)
+    if match:
+        return match.group(1)
+    return None
 
-CONFIG_NAME: Optional[str] = None
+
 CKPT_FILENAME: Optional[str] = None
 
 if len(sys.argv) > 1:
-    CONFIG_NAME = sys.argv[1]
-if len(sys.argv) > 2:
-    CKPT_FILENAME = sys.argv[2]
+    CKPT_FILENAME = sys.argv[1]
 
 sys.argv = sys.argv[:1]
 
-assert CONFIG_NAME, "Missing config name"
 assert CKPT_FILENAME, "Missing checkpoint filename"
+
+CONFIG_NAME = extract_config_name(CKPT_FILENAME)
 
 
 def load_model(cfg: DictConfig):
@@ -50,7 +55,7 @@ def generate_grad_cam(
 
     target_layer = {
         "rgb": model.rgb_base[-1],
-        "depth": model.depth_base[-3],
+        "depth": model.depth_base[-1],
     }[input_type]
 
     def forward_hook(module, input, output):
@@ -124,11 +129,17 @@ def main(cfg: DictConfig):
             cam_depth = cams_depth[i].detach().cpu()
 
             cam_rgb = torch.nn.functional.interpolate(
-                cam_rgb.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
+                cam_rgb.unsqueeze(0),
+                size=(224, 224),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze()
 
             cam_depth = torch.nn.functional.interpolate(
-                cam_depth.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
+                cam_depth.unsqueeze(0),
+                size=(224, 224),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze()
 
             rgb_img = image_tensor[:3]

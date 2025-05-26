@@ -1,4 +1,8 @@
 type: transformer
 
-# Parameters exampledefault values
-# dropout: 0.3
+name: transformer
+
+classifier_head:
+  name: transformer_v1
+dropout: 0.5
+init_weights_method: kaiming

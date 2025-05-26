@@ -41,11 +41,13 @@ class DualBranchRGBDNet(nn.Module):
         self.cfg = cfg
 
         # RGB MobileNetV2
-        rgb_model = models.mobilenet_v2(pretrained=pretrained).features
+        weights = models.MobileNet_V2_Weights.IMAGENET1K_V1 if pretrained else None
+        rgb_model = models.mobilenet_v2(weights=weights).features
+
         self.rgb_base = rgb_model
 
         # Depth MobileNetV2 (adapted for 1-channel input)
-        depth_model = models.mobilenet_v2(pretrained=pretrained)
+        depth_model = models.mobilenet_v2(weights=weights)
         depth_model.features[0][0] = nn.Conv2d(
             1, 32, kernel_size=3, stride=2, padding=1, bias=False
         )
@@ -91,10 +93,15 @@ class DualBranchRGBDNet(nn.Module):
 
         if self.use_bidirectional_attention:
             # Use original (unmodulated) features to avoid feedback loop
-            depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat.detach())
-            rgb_feat = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
+            modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat.detach())
+            modulated_rgb = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
+
+            depth_feat = depth_feat + 0.1 * modulated_depth
+            rgb_feat = rgb_feat + 0.1 * modulated_rgb
+
         elif self.use_rgb_guided_attention:
-            depth_feat = self.rgb_guides_depth(depth_feat, rgb_feat)
+            modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat)
+            depth_feat = depth_feat + 0.1 * modulated_depth
 
         if return_features:
             return rgb_feat, depth_feat

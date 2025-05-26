@@ -97,6 +97,10 @@ class FaceForensics(Dataset):
 
             elif self.depth_type == "depth":
                 depth = np.load(self.dataset.depths[idx], allow_pickle=True)
+
+                # Normalize depth to [0, 1] per image
+                depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
+
                 image = np.array(image)
                 image = np.stack(
                     (image[:, :, 0], image[:, :, 1], image[:, :, 2], depth), axis=-1

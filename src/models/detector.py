@@ -94,7 +94,7 @@ class RGBDDetector(pl.LightningModule):
         optimizer = torch.optim.Adam(
             [
                 {"params": self.model.rgb_base.parameters(), "lr": lr * 0.01},
-                {"params": self.model.depth_base.parameters(), "lr": lr * 0.01},
+                {"params": self.model.depth_base.parameters(), "lr": lr * 0.1},
                 {"params": self.model.classifier.parameters(), "lr": lr},
                 *(
                     [

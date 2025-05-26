@@ -3,6 +3,8 @@ import torch.nn as nn
 import torchvision.models as models
 from einops import rearrange
 
+from models.dehydrate import dehydrate_classifier_head
+
 
 class TransformerRGDBNet(nn.Module):
     def __init__(self, cfg, num_classes=2, pretrained=True):
@@ -10,8 +12,10 @@ class TransformerRGDBNet(nn.Module):
         self.cfg = cfg
 
         # RGB and Depth feature extractors (ResNet18)
-        self.rgb_backbone = models.resnet18(pretrained=pretrained)
-        self.depth_backbone = models.resnet18(pretrained=pretrained)
+        # RGB and Depth feature extractors (ResNet18)
+        weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
+        self.rgb_backbone = models.resnet18(weights=weights)
+        self.depth_backbone = models.resnet18(weights=weights)
         self.depth_backbone.conv1 = nn.Conv2d(
             1, 64, kernel_size=7, stride=2, padding=3, bias=False
         )
@@ -37,12 +41,17 @@ class TransformerRGDBNet(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, self.token_dim))
 
         # Final classification head
-        self.classifier = nn.Sequential(
-            nn.Linear(self.token_dim, 256),
-            nn.ReLU(),
-            nn.Dropout(self.cfg.model.dropout),
-            nn.Linear(256, num_classes),
-        )
+        self.classifier = dehydrate_classifier_head(cfg=cfg, num_classes=num_classes)
+
+        if self.cfg.model.init_weights_method == "kaiming":
+            self._init_kaiming_weights()
+
+    def _init_kaiming_weights(self) -> None:
+        for m in self.classifier:
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                if m.bias is None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         rgb = x[:, :3, :, :]

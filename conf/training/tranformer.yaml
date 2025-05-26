@@ -1,1 +1,11 @@
-# TODO - replace values after trainings
+defaults:
+  - common 
+  - _self_
+
+learning_rate: 0.0001
+label_smoothing: 0.1
+
+scheduler:
+  type: OneCycleLR
+  pct_start: 0.3
+  steps_per_epoch: 968

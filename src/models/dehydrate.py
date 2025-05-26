@@ -109,6 +109,20 @@ def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequentia
             nn.Linear(256, num_classes),
         )
 
+    if name == "transformer_v1":
+        return nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(1280 * 2, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Dropout(cfg.model.dropout),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, num_classes),
+        )
+
     raise Exception("Unknown classifier head")
 
 
