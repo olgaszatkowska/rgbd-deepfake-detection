@@ -69,7 +69,7 @@ def generate_grad_cam(
     handle_bwd = target_layer.register_full_backward_hook(backward_hook)
 
     input_tensor.requires_grad_()
-    output = model(input_tensor)
+    output, _ = model(input_tensor)
 
     if target_class is None:
         target_class = output.argmax(dim=1)
@@ -105,7 +105,7 @@ def main(cfg: DictConfig):
     datamodule.setup("fit")
     val_loader = datamodule.val_dataloader()
 
-    save_dir = Path(f"heat_maps/{cfg.model.name}/combined")
+    save_dir = Path(f"heat_maps/{cfg.model.name}")
     save_dir.mkdir(parents=True, exist_ok=True)
 
     num_batches = 3  # Number of batches to process
@@ -117,7 +117,7 @@ def main(cfg: DictConfig):
 
         images = batch["image"].to(device)
         labels = batch["label"]
-        outputs = model(images)
+        outputs, _ = model(images)
         preds = outputs.argmax(dim=1).detach().cpu()
 
         cams_rgb = generate_grad_cam(model, images, "rgb")

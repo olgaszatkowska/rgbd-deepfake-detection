@@ -1,4 +1,2 @@
 classifier_head:
   name: dual_branch_v3
-dropout: 0.5
-init_weights_method: kaiming

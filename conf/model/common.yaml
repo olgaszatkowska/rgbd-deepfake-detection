@@ -1,0 +1,3 @@
+dropout: 0.5
+init_weights_method: kaiming
+drop_rgb_prob: 0.05

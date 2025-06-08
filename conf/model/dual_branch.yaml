@@ -1,4 +1,5 @@
 defaults:
+  - common
   - common_dual_branch
   - _self_
 

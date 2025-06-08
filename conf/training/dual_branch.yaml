@@ -7,5 +7,5 @@ label_smoothing: 0.1
 
 scheduler:
   type: OneCycleLR
-  pct_start: 0.3
+  pct_start: 0.5
   steps_per_epoch: 968

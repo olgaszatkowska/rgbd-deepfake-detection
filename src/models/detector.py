@@ -1,10 +1,14 @@
+from collections import Counter
+
 import pytorch_lightning as pl
 import torch
 from torch import Tensor
 from torchmetrics import Accuracy
+import torch.nn.functional as F
 from typing import Any, Dict
 
 from models.dehydrate import dehydrate_scheduler_config, dehydrate_loss
+from data.faceforensics import FaceForensics
 
 
 class RGBDDetector(pl.LightningModule):
@@ -14,7 +18,17 @@ class RGBDDetector(pl.LightningModule):
 
         self.model = model
         self.lr = lr
-        self.criterion = dehydrate_loss(cfg=cfg)
+
+        # Compute class weights from training data
+        train_dataset = FaceForensics(conf=cfg, split="train")
+        label_counts = Counter(train_dataset.dataset["classes"])
+        total = sum(label_counts.values())
+        weights = torch.tensor(
+            [total / (2 * label_counts.get(i, 1)) for i in range(2)],
+            dtype=torch.float
+        )
+
+        self.criterion = dehydrate_loss(cfg=cfg, weights=weights)
         self.train_accuracy = Accuracy(task="multiclass", num_classes=2)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=2)
         self.confidences = []
@@ -29,18 +43,42 @@ class RGBDDetector(pl.LightningModule):
         self, batch: Dict[str, Tensor], batch_idx: int
     ) -> Dict[str, Tensor]:
         x, y = batch["image"], batch["label"]
-        logits = self(x)
-        loss = self.criterion(logits, y)
+
+        logits, depth_aux_logits = self(x)
+
+        loss_main = self.criterion(logits, y)
+        loss_aux = self.criterion(depth_aux_logits, y)
+        loss = loss_main + 0.1 * loss_aux  # weight auxiliary loss
+
         acc = self.train_accuracy(logits, y)
+
         self.log("train_loss", loss)
         self.log("train_acc", acc, prog_bar=True)
+        self.log("depth_aux_loss", loss_aux)
+
+        # Log gradient norm
+        total_norm = sum(p.grad.data.norm(2).item() for p in self.model.parameters() if p.grad is not None)
+        self.log("grad_norm", total_norm)
+
+        # Log modulation weight
+        self.log("mod_weight_rgb2depth", self.model.rgb_to_depth_weight.item())
+        if self.model.use_bidirectional_attention:
+            self.log("mod_weight_depth2rgb", self.model.depth_to_rgb_weight.item())
+
+        # Log feature similarity between branches (cosine similarity)
+        with torch.no_grad():
+            rgb_feat, depth_feat = self.model(x, return_features=True)
+            cos_sim = F.cosine_similarity(rgb_feat.flatten(1), depth_feat.flatten(1), dim=1).mean()
+            self.log("branch_feature_cos_sim", cos_sim)
+
         return {"loss": loss, "acc": acc}
 
     def validation_step(
         self, batch: Dict[str, Tensor], batch_idx: int
     ) -> Dict[str, Tensor]:
         x, y = batch["image"], batch["label"]
-        logits = self(x)
+
+        logits, _ = self(x)  # Ignore auxiliary logits during validation
         loss = self.criterion(logits, y)
         acc = self.val_accuracy(logits, y)
         preds = torch.argmax(logits, dim=1)
@@ -95,7 +133,7 @@ class RGBDDetector(pl.LightningModule):
             [
                 {"params": self.model.rgb_base.parameters(), "lr": lr * 0.01},
                 {"params": self.model.depth_base.parameters(), "lr": lr * 0.1},
-                {"params": self.model.classifier.parameters(), "lr": lr},
+                {"params": self.model.classifier.parameters(), "lr": lr * 0.2},
                 *(
                     [
                         {

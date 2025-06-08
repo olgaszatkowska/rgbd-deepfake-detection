@@ -5,28 +5,7 @@ from torch import Tensor
 from typing import Any
 
 from models.dehydrate import dehydrate_classifier_head
-
-
-class GuidedSEBlock(nn.Module):
-    """
-    Squeeze-and-Excitation block with external guidance.
-    Uses features from a guidance branch RGB to modulate another DEPTH
-    """
-
-    def __init__(self, channels: int, reduction: int = 16) -> None:
-        super(GuidedSEBlock, self).__init__()
-        self.rgb_pool = nn.AdaptiveAvgPool2d(1)
-        self.rgb_fc = nn.Sequential(
-            nn.Conv2d(channels, channels // reduction, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(channels // reduction, channels, 1),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, depth_feat: Tensor, rgb_feat: Tensor) -> Tensor:
-        rgb_attn = self.rgb_pool(rgb_feat)
-        scale = self.rgb_fc(rgb_attn)
-        return depth_feat * scale
+from models.attention import GuidedCBAM
 
 
 class DualBranchRGBDNet(nn.Module):
@@ -62,16 +41,21 @@ class DualBranchRGBDNet(nn.Module):
         )
         uses_depth_guided_block = self.use_bidirectional_attention
 
-        self.rgb_guides_depth: nn.Module | None = (
-            GuidedSEBlock(channels=1280) if use_rgb_guided_block else None
-        )
-        self.depth_guides_rgb: nn.Module | None = (
-            GuidedSEBlock(channels=1280) if uses_depth_guided_block else None
-        )
+        self.rgb_guides_depth = GuidedCBAM(channels=1280) if use_rgb_guided_block else None
+        self.depth_guides_rgb = GuidedCBAM(channels=1280) if uses_depth_guided_block else None
 
         # Global pooling and classifier
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = dehydrate_classifier_head(cfg, num_classes)
+        self.depth_aux_classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(1280, 2)  # 2 = num_classes
+        )
+
+        # Learnable modulation weights
+        self.rgb_to_depth_weight = nn.Parameter(torch.tensor(0.2))
+        self.depth_to_rgb_weight = nn.Parameter(torch.tensor(0.1)) if self.use_bidirectional_attention else None
 
         if self.cfg.model.init_weights_method == "kaiming":
             self._init_kaiming_weights()
@@ -91,17 +75,21 @@ class DualBranchRGBDNet(nn.Module):
         rgb_feat = self.rgb_base(rgb)
         depth_feat = self.depth_base(depth)
 
+        if self.training:
+            if torch.rand(1).item() < self.cfg.model.drop_rgb_prob:
+                rgb = torch.zeros_like(rgb)
+
         if self.use_bidirectional_attention:
             # Use original (unmodulated) features to avoid feedback loop
             modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat.detach())
             modulated_rgb = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
 
-            depth_feat = depth_feat + 0.1 * modulated_depth
-            rgb_feat = rgb_feat + 0.1 * modulated_rgb
+            depth_feat = depth_feat + self.rgb_to_depth_weight * modulated_depth
+            rgb_feat = rgb_feat + self.depth_to_rgb_weight * modulated_rgb
 
         elif self.use_rgb_guided_attention:
             modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat)
-            depth_feat = depth_feat + 0.1 * modulated_depth
+            depth_feat = depth_feat + self.rgb_to_depth_weight * modulated_depth
 
         if return_features:
             return rgb_feat, depth_feat
@@ -110,6 +98,11 @@ class DualBranchRGBDNet(nn.Module):
         rgb_feat = self.pool(rgb_feat)
         depth_feat = self.pool(depth_feat)
 
-        # Fuse and classify
-        fused = torch.cat((rgb_feat, depth_feat), dim=1)  # [B, 1024, 1, 1]
-        return self.classifier(fused)
+        # Auxiliary logits before fusion
+        depth_logits_aux = self.depth_aux_classifier(depth_feat)
+
+        # Fusion
+        fused = torch.cat((rgb_feat, depth_feat), dim=1)
+        fused_logits = self.classifier(fused)
+
+        return fused_logits, depth_logits_aux

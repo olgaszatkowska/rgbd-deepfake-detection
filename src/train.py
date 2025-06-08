@@ -57,6 +57,7 @@ def train_from_config(cfg: DictConfig):
         callbacks=callbacks,
         devices=1,
         logger=[logger_tb, logger_csv],
+        gradient_clip_val=0.5,
     )
 
     trainer.fit(model, datamodule=data_module)

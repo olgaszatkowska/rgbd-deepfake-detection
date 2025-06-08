@@ -1,3 +1,4 @@
+from collections import Counter
 import sys
 from typing import Optional
 
@@ -6,7 +7,7 @@ from torchsummary import summary
 import hydra
 from omegaconf import DictConfig
 
-from data.data_loader import FaceForensicsPlusPlus
+from data.faceforensics import FaceForensics
 from models.dehydrate import dehydrate_model
 
 config_name: Optional[str] = None
@@ -29,16 +30,32 @@ def count_params(model):
 
 
 def check_data(cfg: DictConfig):
-    data_module = FaceForensicsPlusPlus(cfg)
-    data_module.prepare_data()
-    data_module.setup()
+    for split in ["train", "val", "test"]:
+        print(f"\n=== Checking split: {split} ===")
+        dataset = FaceForensics(conf=cfg, split=split)
 
-    train_loader = data_module.train_dataloader()
-    val_loader = data_module.val_dataloader()
+        # Count class indices (0 = real, 1 = fake in binary mode)
+        label_counts = Counter(dataset.dataset["classes"])
+        label_names = cfg.data.real + cfg.data.attacks
 
-    print(f"Train set size: {len(train_loader.dataset)}")
-    print(f"Validation set size: {len(val_loader.dataset)}")
-    print(f"Estimated steps per epoch: {len(train_loader)}")
+        print("Class balance (numeric):")
+        for k, v in label_counts.items():
+            print(f"  Class {k}: {v} samples")
+
+        # Count original labels (source names)
+        source_counts = Counter(dataset.dataset["labels"])
+        print("\nClass balance (label names):")
+        for k, v in source_counts.items():
+            print(f"  {k}: {v} samples")
+
+        total = sum(source_counts.values())
+        real_total = sum(source_counts[r] for r in cfg.data.real if r in source_counts)
+        fake_total = sum(source_counts[a] for a in cfg.data.attacks if a in source_counts)
+
+        print(f"\nTotal samples: {total}")
+        print(f"Real samples: {real_total}")
+        print(f"Fake samples: {fake_total}")
+        print("-" * 40)
 
 
 def check_model(cfg: DictConfig):

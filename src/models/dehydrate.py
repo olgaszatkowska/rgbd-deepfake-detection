@@ -112,7 +112,7 @@ def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequentia
     if name == "transformer_v1":
         return nn.Sequential(
             nn.Flatten(),
-            nn.Linear(1280 * 2, 512),
+            nn.Linear(512, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(cfg.model.dropout),
@@ -126,8 +126,8 @@ def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequentia
     raise Exception("Unknown classifier head")
 
 
-def dehydrate_loss(cfg: DictConfig) -> nn.CrossEntropyLoss:
+def dehydrate_loss(cfg: DictConfig, weights) -> nn.CrossEntropyLoss:
     if cfg.training.label_smoothing:
-        return torch.nn.CrossEntropyLoss(label_smoothing=cfg.training.label_smoothing)
+        return torch.nn.CrossEntropyLoss(label_smoothing=cfg.training.label_smoothing, weight=weights)
 
-    return torch.nn.CrossEntropyLoss()
+    return torch.nn.CrossEntropyLoss(weight=weights)
