@@ -145,27 +145,38 @@ class FaceForensicsPlusPlus(pl.LightningDataModule):
         )
 
     def on_before_batch_transfer(self, batch, dataloader_idx):
-        if self.conf.data.augmentation and self.trainer.training:
-            split = 0.10
-            epoch = self.trainer.current_epoch
-            if epoch < 2:
-                augmentation = self.augmentation0
-            elif epoch < 4:
-                augmentation = self.augmentation1
-                split = 0.25
-            elif epoch < 7:
-                augmentation = sample([self.augmentation1, self.augmentation2], k=1)[0]
-                split = 0.50
-            else:
-                augmentation = self.augmentation2
-                split = 0.75
+        if not self.trainer.training:
+            return batch
 
+        if self.conf.data.augmentation:
+            epoch = self.trainer.current_epoch
+
+            # Select augmentation strength based on epoch
+            if epoch < 2:
+                real_aug = self.augmentation0
+                fake_aug = self.augmentation0
+            elif epoch < 4:
+                real_aug = self.augmentation1
+                fake_aug = self.augmentation2
+            elif epoch < 7:
+                real_aug = sample([self.augmentation1, self.augmentation2], k=1)[0]
+                fake_aug = self.augmentation2
+            else:
+                real_aug = self.augmentation1
+                fake_aug = self.augmentation2
+
+            # Apply label-aware augmentation
             for i in range(batch["image"].shape[0]):
-                if random() < split:
-                    batch["image"][i] = augmentation(batch["image"][i])
+                label = batch["label"][i].item()
+                if label == 0:
+                    batch["image"][i] = real_aug(batch["image"][i])
+                else:
+                    batch["image"][i] = fake_aug(batch["image"][i])
+
         elif self.conf.data.black_box_attack:
             for i in range(batch["image"].shape[0]):
                 batch["image"][i] = self.black_box_attack(batch["image"][i])
+
         return batch
 
     def _compress_tensor(self, tensor) -> torch.Tensor:
