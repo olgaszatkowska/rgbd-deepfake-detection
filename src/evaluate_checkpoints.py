@@ -37,7 +37,7 @@ REALS = ["youtube"]
 
 COL_NAMES = REALS
 
-RESEARCH_DIR = Path("research")
+RESEARCH_DIR = Path("checkpoint_eval")
 RESEARCH_DIR.mkdir(exist_ok=True, parents=True)
 
 def load_model(cfg: DictConfig) -> RGBDDetector:

@@ -126,8 +126,8 @@ def dehydrate_classifier_head(cfg: DictConfig, num_classes: int) -> nn.Sequentia
     raise Exception("Unknown classifier head")
 
 
-def dehydrate_loss(cfg: DictConfig, weights) -> nn.CrossEntropyLoss:
+def dehydrate_loss(cfg: DictConfig) -> nn.CrossEntropyLoss:
     if cfg.training.label_smoothing:
-        return torch.nn.CrossEntropyLoss(label_smoothing=cfg.training.label_smoothing, weight=weights)
+        return torch.nn.CrossEntropyLoss(label_smoothing=cfg.training.label_smoothing)
 
-    return torch.nn.CrossEntropyLoss(weight=weights)
+    return torch.nn.CrossEntropyLoss()

@@ -19,18 +19,11 @@ class RGBDDetector(pl.LightningModule):
         self.model = model
         self.lr = lr
 
-        # Compute class weights from training data
-        train_dataset = FaceForensics(conf=cfg, split="train")
-        label_counts = Counter(train_dataset.dataset["classes"])
-        total = sum(label_counts.values())
-        weights = torch.tensor(
-            [total / (2 * label_counts.get(i, 1)) for i in range(2)],
-            dtype=torch.float
-        )
-
-        self.criterion = dehydrate_loss(cfg=cfg, weights=weights)
+        self.criterion = dehydrate_loss(cfg=cfg)
         self.train_accuracy = Accuracy(task="multiclass", num_classes=2)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=2)
+        self.val_acc_real = Accuracy(task="multiclass", num_classes=2)
+        self.val_acc_fake = Accuracy(task="multiclass", num_classes=2)
         self.confidences = []
 
         self.train_loss_epoch: list[float] = []
@@ -82,8 +75,15 @@ class RGBDDetector(pl.LightningModule):
         loss = self.criterion(logits, y)
         acc = self.val_accuracy(logits, y)
         preds = torch.argmax(logits, dim=1)
-        f2 = self.compute_f2_score(y, preds)
 
+        mask_real = y == 0
+        mask_fake = y == 1
+        if mask_real.any():
+            self.val_acc_real.update(preds[mask_real], y[mask_real])
+        if mask_fake.any():
+            self.val_acc_fake.update(preds[mask_fake], y[mask_fake])
+
+        f2 = self.compute_f2_score(y, preds)
         conf = torch.softmax(logits, dim=1).max(dim=1).values
         avg_conf = conf.mean()
         self.confidences.append(avg_conf.item())
@@ -110,6 +110,12 @@ class RGBDDetector(pl.LightningModule):
             self.log("loss_gap", train_loss - val_loss)
         if train_acc and val_acc:
             self.log("acc_gap", train_acc - val_acc)
+
+        # Log real/fake accuracy at epoch end
+        self.log("val_acc_real", self.val_acc_real.compute())
+        self.log("val_acc_fake", self.val_acc_fake.compute())
+        self.val_acc_real.reset()
+        self.val_acc_fake.reset()
 
     def test_step(self, batch: Dict[str, Tensor], batch_idx: int) -> None:
         x, y = batch["image"], batch["label"]
