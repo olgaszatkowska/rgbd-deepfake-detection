@@ -33,9 +33,7 @@ assert CONFIG_NAME, f"Could not parse config name from {CKPT_FILENAME}"
 ATTACKS = ["Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"]
 REALS = ["youtube"]
 
-# COL_NAMES = ATTACKS + REALS
-
-COL_NAMES = REALS
+COL_NAMES = ATTACKS + REALS
 
 RESEARCH_DIR = Path("checkpoint_eval")
 RESEARCH_DIR.mkdir(exist_ok=True, parents=True)
@@ -59,17 +57,13 @@ def evaluate_model(model: RGBDDetector, cfg: DictConfig):
             cfg.data.attacks = []
             cfg.data.real = [col_name]
 
-        if col_name in REALS:
-            cfg.data.attacks = []
-            cfg.data.real = [col_name]
-
         datamodule = FaceForensicsPlusPlus(cfg)
-        datamodule.setup("fit")
+        datamodule.setup("test")
         
         device = torch.device(cfg.training.accelerator)
         model.eval().to(device)
 
-        val_loader = datamodule.val_dataloader()
+        val_loader = datamodule.test_dataloader()
 
         for batch in val_loader:
             x = batch["image"].to(device)

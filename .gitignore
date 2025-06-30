@@ -180,7 +180,8 @@ rgbd-df-detect-venv
 outputs
 
 # Dataset
-dataset
+dataset/
+dataset_compressed/
 
 # Experiments
 experiments/

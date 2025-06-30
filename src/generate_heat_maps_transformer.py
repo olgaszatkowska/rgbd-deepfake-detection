@@ -21,18 +21,12 @@ def extract_config_name(filename):
         return match.group(1)
     return None
 
-
 CKPT_FILENAME: Optional[str] = None
-
 if len(sys.argv) > 1:
     CKPT_FILENAME = sys.argv[1]
-
 sys.argv = sys.argv[:1]
-
 assert CKPT_FILENAME, "Missing checkpoint filename"
-
 CONFIG_NAME = extract_config_name(CKPT_FILENAME)
-
 
 def load_model(cfg: DictConfig):
     network = dehydrate_model(cfg)
@@ -41,35 +35,26 @@ def load_model(cfg: DictConfig):
     )
     return detector.model
 
-
-def generate_grad_cam(
-    model: Module,
-    input_tensor: Tensor,
-    input_type: str,
-    target_class: Optional[int] = None,
-) -> Tensor:
+def generate_fused_spatial_grad_cam(model: Module, input_tensor: Tensor, target_class: Optional[int] = None) -> Tensor:
     model.eval()
-
-    activations = []
     gradients = []
 
-    target_layer = {
-        "rgb": model.rgb_base[-1],
-        "depth": model.depth_base[-1],
-    }[input_type]
+    # Get spatial fused features
+    fused_spatial = model(input_tensor, return_fused_spatial=True)
+    fused_spatial.retain_grad()
 
-    def forward_hook(module, input, output):
-        activations.append(output)
-        output.retain_grad()
+    def grad_hook(grad):
+        gradients.append(grad)
 
-    def backward_hook(module, grad_input, grad_output):
-        gradients.append(grad_output[0])
+    fused_spatial.register_hook(grad_hook)
 
-    handle_fwd = target_layer.register_forward_hook(forward_hook)
-    handle_bwd = target_layer.register_full_backward_hook(backward_hook)
+    # Manually classify with a temporary linear layer compatible with fused features
+    pooled = torch.nn.functional.adaptive_avg_pool2d(fused_spatial, output_size=(1, 1))
+    flattened = torch.flatten(pooled, 1)
 
-    input_tensor.requires_grad_()
-    output, _ = model(input_tensor)
+    # Create temporary classifier for Grad-CAM
+    temp_classifier = torch.nn.Linear(flattened.shape[1], model.classifier[-1].out_features).to(flattened.device)
+    output = temp_classifier(flattened)
 
     if target_class is None:
         target_class = output.argmax(dim=1)
@@ -78,11 +63,8 @@ def generate_grad_cam(
     model.zero_grad()
     class_score.backward()
 
-    handle_fwd.remove()
-    handle_bwd.remove()
-
     grad = gradients[0]
-    activation = activations[0]
+    activation = fused_spatial
 
     weights = grad.mean(dim=(2, 3), keepdim=True)
     cam = (weights * activation).sum(dim=1, keepdim=True)
@@ -94,7 +76,6 @@ def generate_grad_cam(
 
     return cam
 
-
 @hydra.main(config_path="../conf", config_name=CONFIG_NAME, version_base="1.3")
 def main(cfg: DictConfig):
     model = load_model(cfg=cfg)
@@ -102,13 +83,13 @@ def main(cfg: DictConfig):
     model = model.to(device)
 
     datamodule = FaceForensicsPlusPlus(cfg)
-    datamodule.setup("fit")
-    val_loader = datamodule.val_dataloader()
+    datamodule.setup("test")
+    val_loader = datamodule.test_dataloader()
 
     save_dir = Path(f"heat_maps/{cfg.model.name}")
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    num_batches = 3  # Number of batches to process
+    num_batches = 10  # Number of batches to process
     sample_counter = 0
 
     for batch_idx, batch in enumerate(val_loader):
@@ -120,54 +101,37 @@ def main(cfg: DictConfig):
         outputs, _ = model(images)
         preds = outputs.argmax(dim=1).detach().cpu()
 
-        cams_rgb = generate_grad_cam(model, images, "rgb")
-        cams_depth = generate_grad_cam(model, images, "depth")
+        # Generate Grad-CAM from fused spatial features
+        cams_fused = generate_fused_spatial_grad_cam(model, images)
 
         for i in range(images.size(0)):
             image_tensor = images[i].detach().cpu()
-            cam_rgb = cams_rgb[i].detach().cpu()
-            cam_depth = cams_depth[i].detach().cpu()
+            cam = cams_fused[i].detach().cpu()
 
-            cam_rgb = torch.nn.functional.interpolate(
-                cam_rgb.unsqueeze(0),
-                size=(224, 224),
-                mode="bilinear",
-                align_corners=False,
+            # Resize CAM to match image
+            cam = torch.nn.functional.interpolate(
+                cam.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False
             ).squeeze()
 
-            cam_depth = torch.nn.functional.interpolate(
-                cam_depth.unsqueeze(0),
-                size=(224, 224),
-                mode="bilinear",
-                align_corners=False,
-            ).squeeze()
-
-            rgb_img = image_tensor[:3]
-            depth_img = image_tensor[3:4]
-
+            # Normalize RGB image and CAM
             def normalize(t):
                 return (t - t.min()) / (t.max() - t.min() + 1e-8)
 
-            rgb_img = normalize(rgb_img)
-            depth_img = normalize(depth_img)
-
+            rgb_img = normalize(image_tensor[:3])
             input_rgb = F.to_pil_image(rgb_img)
-            input_depth = F.to_pil_image(depth_img.squeeze(0))
-            heatmap_rgb = F.to_pil_image(cam_rgb)
-            heatmap_depth = F.to_pil_image(cam_depth)
+            heatmap = F.to_pil_image(cam)
 
-            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+            # Plot: original and overlayed heatmap
+            fig, axs = plt.subplots(1, 2, figsize=(8, 4))
 
             axs[0].imshow(input_rgb)
+            axs[0].set_title("Input RGB")
             axs[0].axis("off")
 
             axs[1].imshow(input_rgb)
-            axs[1].imshow(heatmap_rgb, cmap="jet", alpha=0.5)
+            axs[1].imshow(heatmap, cmap="jet", alpha=0.5)
+            axs[1].set_title("Fused Grad-CAM")
             axs[1].axis("off")
-
-            axs[2].imshow(input_depth, cmap="gray")
-            axs[2].imshow(heatmap_depth, cmap="jet", alpha=0.5)
-            axs[2].axis("off")
 
             fig.tight_layout()
 
@@ -177,9 +141,8 @@ def main(cfg: DictConfig):
             filename = f"sample_{sample_counter}_{correctness}_{label}.png"
 
             fig.savefig(save_dir / filename, bbox_inches="tight")
-            plt.close(fig)
             sample_counter += 1
-
+            plt.close(fig)
 
 if __name__ == "__main__":
     main()

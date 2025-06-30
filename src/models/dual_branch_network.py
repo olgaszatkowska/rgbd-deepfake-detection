@@ -67,7 +67,7 @@ class DualBranchRGBDNet(nn.Module):
                 if m.bias is None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x: Tensor, return_features=False) -> Tensor:
+    def forward(self, x: Tensor, return_features=False, return_fused=False, return_fused_spatial=False) -> Tensor:
         rgb = x[:, :3, :, :]
         depth = x[:, 3:, :, :]
 
@@ -75,9 +75,8 @@ class DualBranchRGBDNet(nn.Module):
         rgb_feat = self.rgb_base(rgb)
         depth_feat = self.depth_base(depth)
 
-        if self.training:
-            if torch.rand(1).item() < self.cfg.model.drop_rgb_prob:
-                rgb = torch.zeros_like(rgb)
+        if self.training and torch.rand(1).item() < self.cfg.model.drop_rgb_prob:
+            rgb = torch.zeros_like(rgb)
 
         if self.use_bidirectional_attention:
             # Use original (unmodulated) features to avoid feedback loop
@@ -91,18 +90,25 @@ class DualBranchRGBDNet(nn.Module):
             modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat)
             depth_feat = depth_feat + self.rgb_to_depth_weight * modulated_depth
 
-        if return_features:
-            return rgb_feat, depth_feat
+        if return_fused_spatial:
+            # Return unpooled, fused spatial feature map
+            fused_spatial = torch.cat((rgb_feat, depth_feat), dim=1)
+            return fused_spatial
 
-        # Global pooling
+        # Otherwise, continue with normal pooling and classification
         rgb_feat = self.pool(rgb_feat)
         depth_feat = self.pool(depth_feat)
 
-        # Auxiliary logits before fusion
+        if return_fused:
+            return torch.cat((rgb_feat, depth_feat), dim=1)
+
         depth_logits_aux = self.depth_aux_classifier(depth_feat)
 
         # Fusion
         fused = torch.cat((rgb_feat, depth_feat), dim=1)
         fused_logits = self.classifier(fused)
+
+        if return_features:
+            return rgb_feat, depth_feat
 
         return fused_logits, depth_logits_aux

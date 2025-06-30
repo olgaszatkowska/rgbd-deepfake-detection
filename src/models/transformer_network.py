@@ -70,29 +70,29 @@ class TransformerRGDBNet(nn.Module):
                 if m.bias is None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, return_features=False):
+    def forward(self, x, return_features=False, return_cls_token=False, return_fused_spatial=False):
         rgb = x[:, :3, :, :]
         depth = x[:, 3:, :, :]
 
-        rgb_feat = self.rgb_base(rgb)
-        depth_feat = self.depth_base(depth)
+        rgb_feat = self.rgb_base(rgb)   # shape [B, 512, H, W]
+        depth_feat = self.depth_base(depth)  # same shape
 
-        if self.training:
-            if torch.rand(1).item() < self.cfg.model.drop_rgb_prob:
-                rgb = torch.zeros_like(rgb)
+        if self.training and torch.rand(1).item() < self.cfg.model.drop_rgb_prob:
+            rgb = torch.zeros_like(rgb)
 
-        # Optional attention
         if self.use_bidirectional_attention:
             modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat.detach())
             modulated_rgb = self.depth_guides_rgb(rgb_feat, depth_feat.detach())
             depth_feat = depth_feat + self.rgb_to_depth_weight * modulated_depth
             rgb_feat = rgb_feat + self.depth_to_rgb_weight * modulated_rgb
-
         elif self.use_rgb_guided_attention:
             modulated_depth = self.rgb_guides_depth(depth_feat, rgb_feat)
             depth_feat = depth_feat + self.rgb_to_depth_weight * modulated_depth
 
-        # Return features if requested (for cosine similarity logging)
+        if return_fused_spatial:
+            fused_spatial = torch.cat([rgb_feat, depth_feat], dim=1)  # shape [B, 1024, H, W]
+            return fused_spatial
+
         if return_features:
             return rgb_feat, depth_feat
 
